@@ -293,38 +293,35 @@ const computeHash = async (str) => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const MASTER_DATA = {"version": 7, "contacts": [], "stages": ["Bloom Clients", "Old Clients", "Bloom Connectors", "Bloom Leads", "Coach Leads", "Coaches", "Closed Opportunities", "Inner Game Client", "Not Interested/Lost", "Contacts", "Friends"], "cadence": {"Bloom Clients": 7, "Old Clients": 21, "Bloom Connectors": 14, "Bloom Leads": 7, "Coach Leads": 5, "Coaches": 7, "Closed Opportunities": 30, "Friends": 30}};
+const MASTER_DATA = {"version": 7, "contacts": [], "stages": ["New Lead", "Contacted", "Qualified", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost"], "cadence": {"New Lead": 3, "Contacted": 5, "Qualified": 7, "Proposal Sent": 5, "Negotiation": 3, "Closed Won": 30, "Closed Lost": 30}};
 
 const DEFAULT_STAGES = MASTER_DATA.stages;
 
 const STAGE_COLORS = {
-  'Bloom Clients': '#10b981', 'Old Clients': '#f59e0b',
-  'Bloom Connectors': '#8b5cf6', 'Bloom Leads': '#3b82f6',
-  'Coach Leads': '#06b6d4', 'Coaches': '#14b8a6',
-  'Closed Opportunities': '#ef4444', 'Inner Game Client': '#6366f1',
-  'Not Interested/Lost': '#64748b', 'Contacts': '#ec4899', 'Friends': '#f472b6'
+  'New Lead': '#3b82f6', 'Contacted': '#06b6d4',
+  'Qualified': '#8b5cf6', 'Proposal Sent': '#f59e0b',
+  'Negotiation': '#f97316', 'Closed Won': '#10b981',
+  'Closed Lost': '#ef4444'
 };
 
 const FALLBACK_COLORS = ['#6366f1','#ec4899','#f97316','#84cc16','#0ea5e9','#a855f7','#14b8a6','#f43f5e','#eab308','#64748b'];
 
 const DEFAULT_CADENCE = MASTER_DATA.cadence || {
-  'Bloom Clients': 7, 'Old Clients': 21, 'Bloom Connectors': 14,
-  'Bloom Leads': 7, 'Coach Leads': 5, 'Coaches': 7,
-  'Closed Opportunities': 30
+  'New Lead': 3, 'Contacted': 5, 'Qualified': 7,
+  'Proposal Sent': 5, 'Negotiation': 3,
+  'Closed Won': 30, 'Closed Lost': 30
 };
 
 const STAGNATION = {
-  'Bloom Clients': 21, 'Old Clients': 30, 'Bloom Connectors': 21,
-  'Bloom Leads': 14, 'Coach Leads': 10, 'Coaches': 14,
-  'Closed Opportunities': 60, 'Inner Game Client': 21,
-  'Not Interested/Lost': 90, 'Contacts': 30, 'Friends': 30, default: 30
+  'New Lead': 14, 'Contacted': 10, 'Qualified': 14,
+  'Proposal Sent': 21, 'Negotiation': 14,
+  'Closed Won': 90, 'Closed Lost': 90, default: 30
 };
 
 const STAGE_PROBABILITY = {
-  'Bloom Leads': 0.1, 'Coach Leads': 0.15, 'Contacts': 0.05,
-  'Bloom Connectors': 0.2, 'Coaches': 0.3, 'Bloom Clients': 0.8,
-  'Inner Game Client': 0.9, 'Old Clients': 0.4,
-  'Closed Opportunities': 0.0, 'Not Interested/Lost': 0.0, 'Friends': 0.0,
+  'New Lead': 0.1, 'Contacted': 0.2, 'Qualified': 0.4,
+  'Proposal Sent': 0.6, 'Negotiation': 0.8,
+  'Closed Won': 1.0, 'Closed Lost': 0.0,
   default: 0.25
 };
 
