@@ -293,7 +293,7 @@ const computeHash = async (str) => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const MASTER_DATA = {"version": 7, "contacts": [], "stages": ["New Lead", "Contacted", "Qualified", "Proposal Sent", "Negotiation", "Closed Won", "Closed Lost"], "cadence": {"New Lead": 3, "Contacted": 5, "Qualified": 7, "Proposal Sent": 5, "Negotiation": 3, "Closed Won": 30, "Closed Lost": 30}};
+const MASTER_DATA = {"version": 7, "contacts": [], "stages": [], "cadence": {}};
 
 const DEFAULT_STAGES = MASTER_DATA.stages;
 
