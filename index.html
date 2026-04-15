@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#3b82f6">
-<title>Inner Game CRM</title>
+<title>Bloom CRM</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
@@ -20,12 +20,12 @@
   // ─── Firebase Configuration ───
   // REPLACE with your Firebase project config
   const FIREBASE_CONFIG = {
-    apiKey: "PLACEHOLDER",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "1:YOUR_SENDER_ID:web:009fa9d1ac68d49e0f6f9b"
+    apiKey: "AIzaSyBXsoElMHLajz0II4aAr924K2h6ugQOVBk",
+    authDomain: "inner-game-crm.firebaseapp.com",
+    projectId: "inner-game-crm",
+    storageBucket: "inner-game-crm.firebasestorage.app",
+    messagingSenderId: "328943165826",
+    appId: "1:328943165826:web:009fa9d1ac68d49e0f6f9b"
   };
 
   // Initialize Firebase
@@ -231,16 +231,25 @@
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // ─── Constants ───
-const STORAGE_KEY = 'YOUR_PROJECT_ID-data';
 const STORAGE_VERSION = 7;
-const BACKUP_KEY = STORAGE_KEY + '-backup';
-const MASTER_DATA_VERSION = '2026-03-19T21';
-const MASTER_VERSION_KEY = STORAGE_KEY + '-master-version';
-const LAST_BACKUP_DOWNLOAD_KEY = STORAGE_KEY + '-last-backup-download';
 const BACKUP_REMINDER_DAYS = 3;
-const IDB_NAME = 'YOUR_PROJECT_ID-idb';
 const IDB_STORE = 'backups';
 const IDB_KEY = 'latest';
+
+// Per-user storage keys (set after auth)
+let CURRENT_UID = null;
+let STORAGE_KEY, BACKUP_KEY, MASTER_VERSION_KEY, LAST_BACKUP_DOWNLOAD_KEY, IDB_NAME;
+const initStorageKeys = (uid) => {
+  CURRENT_UID = uid;
+  STORAGE_KEY = 'bloom-crm-' + uid + '-data';
+  BACKUP_KEY = STORAGE_KEY + '-backup';
+  MASTER_VERSION_KEY = STORAGE_KEY + '-master-version';
+  LAST_BACKUP_DOWNLOAD_KEY = STORAGE_KEY + '-last-backup-download';
+  IDB_NAME = 'bloom-crm-' + uid + '-idb';
+};
+// Initialize with placeholder until auth
+initStorageKeys('anonymous');
+const MASTER_DATA_VERSION = '2026-03-19T21';
 
 // ─── IndexedDB Secondary Backup ───
 const idbOpen = () => new Promise((resolve, reject) => {
@@ -1579,7 +1588,7 @@ const SettingsView = ({ stages, onUpdateStages, onRenameStage, cadence, onUpdate
       </div>
       <div className="bg-white rounded-xl border p-4">
         <h3 className="font-semibold mb-2">About</h3>
-        <p className="text-sm text-gray-500">Inner Game CRM v{STORAGE_VERSION}</p>
+        <p className="text-sm text-gray-500">Bloom CRM v{STORAGE_VERSION}</p>
         <p className="text-sm text-gray-500">Data stored locally in your browser. {contacts.length} contacts loaded.</p>
       </div>
     </div>
@@ -1588,8 +1597,7 @@ const SettingsView = ({ stages, onUpdateStages, onRenameStage, cadence, onUpdate
 
 // ─── Firestore Sync Layer ───
 // Fixed document path for single-user CRM (data shared across all devices)
-const CRM_DOC_ID = 'demo_crm_main';
-const firestoreDocPath = () => _fbDb ? _fbDb.collection('crm_data').doc(CRM_DOC_ID) : null;
+const firestoreDocPath = () => _fbDb && CURRENT_UID ? _fbDb.collection('crm_data').doc(CURRENT_UID) : null;
 
 const firestoreSave = async (data) => {
   if (!_fbReady) return;
@@ -1614,62 +1622,89 @@ const firestoreLoad = async () => {
   } catch(e) { console.error('[CRM] Firestore load failed:', e); return null; }
 };
 
-// SHA-256 hash function for password verification
-const sha256 = async (message) => {
-  const msgBuffer = new TextEncoder().encode(message);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
-
-const PASS_HASH = '2a97516c354b68848cdbd8f54a226a0a55b21ed138e207ad6c5cbb9c00aa5aea';
-const AUTH_KEY = 'YOUR_PROJECT_ID-auth';
-
-// ─── Auth Wrapper & Login Screen ───
-const LoginScreen = ({ onLogin, loading }) => {
-  const [username, setUsername] = useState('');
+// ─── Auth Wrapper & Login/Signup Screen ───
+const AuthScreen = ({ onAuth, loading }) => {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [checking, setChecking] = useState(false);
+  const [mode, setMode] = useState('login'); // 'login' or 'signup'
+  const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setChecking(true);
     try {
-      const hash = await sha256(password);
-      if (username === 'demo' && hash === PASS_HASH) {
-        sessionStorage.setItem(AUTH_KEY, 'true');
-        // Sign in anonymously to Firebase for Firestore access
-        if (_fbReady) await _fbAuth.signInAnonymously();
-        onLogin();
+      if (mode === 'signup') {
+        if (password.length < 6) { setError('Password must be at least 6 characters'); setChecking(false); return; }
+        const cred = await _fbAuth.createUserWithEmailAndPassword(email, password);
+        if (name) await cred.user.updateProfile({ displayName: name });
+        onAuth(cred.user);
       } else {
-        setError('Invalid username or password');
+        const cred = await _fbAuth.signInWithEmailAndPassword(email, password);
+        onAuth(cred.user);
       }
     } catch(err) {
-      setError('Login failed: ' + err.message);
+      const msg = err.code === 'auth/user-not-found' ? 'No account with that email' :
+                  err.code === 'auth/wrong-password' ? 'Incorrect password' :
+                  err.code === 'auth/invalid-credential' ? 'Invalid email or password' :
+                  err.code === 'auth/email-already-in-use' ? 'An account with that email already exists' :
+                  err.code === 'auth/invalid-email' ? 'Please enter a valid email' :
+                  err.code === 'auth/too-many-requests' ? 'Too many attempts. Try again later.' :
+                  err.message;
+      setError(msg);
     }
     setChecking(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) { setError('Enter your email first'); return; }
+    try {
+      await _fbAuth.sendPasswordResetEmail(email);
+      setResetSent(true);
+      setError('');
+    } catch(err) { setError('Could not send reset email. Check the address.'); }
   };
 
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div style={{fontSize: '48px', marginBottom: '16px'}}>{'\uD83C\uDFAF'}</div>
-        <h1 className="text-2xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>Inner Game CRM</h1>
-        <p className="text-sm mb-6" style={{color: 'var(--text-secondary)'}}>Sign in to access your CRM</p>
+        <div style={{fontSize: '48px', marginBottom: '16px'}}>{'\uD83C\uDF31'}</div>
+        <h1 className="text-2xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>Bloom CRM</h1>
+        <p className="text-sm mb-6" style={{color: 'var(--text-secondary)'}}>
+          {mode === 'login' ? 'Sign in to your CRM' : 'Create your account'}
+        </p>
         {loading ? (
           <div className="text-sm" style={{color: 'var(--text-tertiary)'}}>Loading...</div>
         ) : (
           <form onSubmit={handleSubmit}>
-            <input type="text" className="login-input" placeholder="Username" value={username}
-              onChange={e => setUsername(e.target.value)} autoComplete="username" autoFocus />
+            {mode === 'signup' && (
+              <input type="text" className="login-input" placeholder="Your name" value={name}
+                onChange={e => setName(e.target.value)} autoComplete="name" />
+            )}
+            <input type="email" className="login-input" placeholder="Email" value={email}
+              onChange={e => { setEmail(e.target.value); setResetSent(false); }} autoComplete="email" autoFocus />
             <input type="password" className="login-input" placeholder="Password" value={password}
-              onChange={e => setPassword(e.target.value)} autoComplete="current-password" />
+              onChange={e => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
             {error && <div className="login-error">{error}</div>}
-            <button type="submit" className="login-btn" disabled={checking || !username || !password}>
-              {checking ? 'Signing in...' : 'Sign In'}
+            {resetSent && <div className="text-sm text-green-600 mb-3">Password reset email sent! Check your inbox.</div>}
+            <button type="submit" className="login-btn" disabled={checking || !email || !password}>
+              {checking ? (mode === 'login' ? 'Signing in...' : 'Creating account...') : (mode === 'login' ? 'Sign In' : 'Create Account')}
             </button>
+            {mode === 'login' && (
+              <button type="button" onClick={handleForgotPassword} className="text-sm hover:underline mt-3 block w-full text-center" style={{color: 'var(--text-tertiary)'}}>
+                Forgot password?
+              </button>
+            )}
+            <div className="mt-4 text-sm text-center" style={{color: 'var(--text-secondary)'}}>
+              {mode === 'login' ? (
+                <span>Don't have an account? <button type="button" onClick={() => { setMode('signup'); setError(''); }} className="font-semibold hover:underline" style={{color: 'var(--accent)'}}>Sign up</button></span>
+              ) : (
+                <span>Already have an account? <button type="button" onClick={() => { setMode('login'); setError(''); }} className="font-semibold hover:underline" style={{color: 'var(--accent)'}}>Sign in</button></span>
+              )}
+            </div>
           </form>
         )}
       </div>
@@ -1677,7 +1712,7 @@ const LoginScreen = ({ onLogin, loading }) => {
   );
 };
 
-const DataMigrationScreen = ({ onImport, onSkip }) => {
+const WelcomeScreen = ({ onImport, onSkip, userName }) => {
   const fileRef = useRef();
   const [importing, setImporting] = useState(false);
 
@@ -1698,7 +1733,7 @@ const DataMigrationScreen = ({ onImport, onSkip }) => {
   // Check if there's localStorage data to auto-migrate
   const localData = useMemo(() => {
     try {
-      const raw = localStorage.getItem('YOUR_PROJECT_ID-data');
+      const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) { const d = JSON.parse(raw); if (d.contacts && d.contacts.length > 0) return d; }
     } catch(e) {}
     return null;
@@ -1707,9 +1742,9 @@ const DataMigrationScreen = ({ onImport, onSkip }) => {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div style={{fontSize: '48px', marginBottom: '16px'}}>{'📦'}</div>
-        <h1 className="text-xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>Welcome, Dhiren!</h1>
-        <p className="text-sm mb-6" style={{color: 'var(--text-secondary)'}}>No CRM data found in the cloud yet. Import your existing data to get started.</p>
+        <div style={{fontSize: '48px', marginBottom: '16px'}}>{'\uD83C\uDF31'}</div>
+        <h1 className="text-xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>Welcome{userName ? ', ' + userName : ''}!</h1>
+        <p className="text-sm mb-6" style={{color: 'var(--text-secondary)'}}>Your CRM is ready. Import existing data or start fresh.</p>
 
         {localData && (
           <div className="mb-4">
@@ -1739,43 +1774,51 @@ const DataMigrationScreen = ({ onImport, onSkip }) => {
 
 // ─── App Wrapper (handles auth + data loading) ───
 const AppWrapper = () => {
-  const [authed, setAuthed] = useState(() => sessionStorage.getItem(AUTH_KEY) === 'true');
-  const [cloudData, setCloudData] = useState(undefined); // undefined = loading, null = not found
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [cloudData, setCloudData] = useState(undefined);
   const [migrationDone, setMigrationDone] = useState(false);
-  const [fbReady, setFbReady] = useState(false);
 
-  // On mount, if already authed, ensure Firebase anonymous auth
+  // Listen to Firebase auth state
   useEffect(() => {
-    if (!authed || !_fbReady) return;
-    const init = async () => {
-      if (!_fbAuth.currentUser) {
-        await _fbAuth.signInAnonymously();
+    if (!_fbReady) { setAuthChecked(true); return; }
+    const unsub = _fbAuth.onAuthStateChanged((user) => {
+      if (user) {
+        initStorageKeys(user.uid);
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
       }
-      setFbReady(true);
-    };
-    init().catch(e => { console.warn('[CRM] Firebase init:', e); setFbReady(true); });
-  }, [authed]);
+      setAuthChecked(true);
+    });
+    return unsub;
+  }, []);
 
-  // Load cloud data when Firebase is ready
+  // Load cloud data when user is authenticated
   useEffect(() => {
-    if (!authed || !fbReady) return;
+    if (!currentUser) return;
+    setCloudData(undefined);
+    setMigrationDone(false);
     firestoreLoad().then(d => {
       setCloudData(d || null);
       if (d) setMigrationDone(true);
     });
-  }, [authed, fbReady]);
+  }, [currentUser]);
+
+  // Waiting for auth check
+  if (!authChecked) return <AuthScreen loading={true} />;
 
   // Not logged in
-  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} loading={false} />;
+  if (!currentUser) return <AuthScreen onAuth={(user) => { initStorageKeys(user.uid); setCurrentUser(user); }} loading={false} />;
 
   // Loading cloud data
-  if (_fbReady && cloudData === undefined && !migrationDone) {
-    return <LoginScreen loading={true} />;
+  if (cloudData === undefined && !migrationDone) {
+    return <AuthScreen loading={true} />;
   }
 
-  // No cloud data — show migration screen
-  if (_fbReady && cloudData === null && !migrationDone) {
-    return <DataMigrationScreen onSkip={() => { setMigrationDone(true); setCloudData(null); }}
+  // No cloud data — show welcome/import screen
+  if (cloudData === null && !migrationDone) {
+    return <WelcomeScreen userName={currentUser.displayName} onSkip={() => { setMigrationDone(true); setCloudData(null); }}
       onImport={(d) => {
         const migrated = migrateData(d);
         firestoreSave(migrated);
@@ -1784,7 +1827,7 @@ const AppWrapper = () => {
       }} />;
   }
 
-  return <App user={authed} initialCloudData={cloudData} />;
+  return <App user={currentUser} initialCloudData={cloudData} />;
 };
 
 // ─── App Component ───
@@ -1800,14 +1843,14 @@ const App = ({ user, initialCloudData }) => {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [toast, setToast] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
-    const stored = localStorage.getItem('YOUR_PROJECT_ID-theme');
+    const stored = localStorage.getItem('bloom-crm-theme');
     if (stored) return stored === 'dark';
     return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
-    localStorage.setItem('YOUR_PROJECT_ID-theme', darkMode ? 'dark' : 'light');
+    localStorage.setItem('bloom-crm-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   const preUpdateKeys = useMemo(() => {
@@ -2061,7 +2104,7 @@ const App = ({ user, initialCloudData }) => {
   return (
     <div className="flex h-screen" style={{background: 'var(--bg-primary)', color: 'var(--text-primary)'}}>
       <div className={'desktop-sidebar ' + (sidebarOpen ? 'w-56' : 'w-0') + ' border-r flex-shrink-0 transition-all overflow-hidden'} style={{background: 'var(--sidebar-bg)'}}>
-        <div className="p-4 border-b"><h1 className="text-lg font-bold" style={{color: 'var(--accent)'}}>Inner Game CRM</h1></div>
+        <div className="p-4 border-b"><h1 className="text-lg font-bold" style={{color: 'var(--accent)'}}>Bloom CRM</h1></div>
         <nav className="p-3 space-y-1">{tabs.map(tab => (
           <div key={tab.id} className={'sidebar-item text-sm ' + (activeTab === tab.id ? 'active' : '')} onClick={() => setActiveTab(tab.id)}>
             <span>{tab.icon}</span><span>{tab.label}</span>
@@ -2082,9 +2125,9 @@ const App = ({ user, initialCloudData }) => {
           <button onClick={() => setDarkMode(d => !d)} className="theme-toggle" title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} />
           <button onClick={() => setShowShortcuts(true)} className="text-xs text-gray-400 hover:text-gray-600 cursor-pointer" title="Keyboard shortcuts"><span className="kbd">?</span></button>
           <button onClick={handleAddContact} className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90" style={{background: 'var(--accent)'}}>+ Add</button>
-          <button onClick={() => { if(confirm('Sign out?')) { sessionStorage.removeItem(AUTH_KEY); if(_fbReady) _fbAuth.signOut(); window.location.reload(); } }}
+          <button onClick={() => { if(confirm('Sign out?')) { _fbAuth.signOut(); } }}
             className="flex items-center gap-1" title="Sign out">
-            <span className="w-7 h-7 rounded-full flex items-center justify-content text-xs font-bold text-white" style={{background: 'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center'}}>D</span>
+            <span className="w-7 h-7 rounded-full flex items-center justify-content text-xs font-bold text-white" style={{background: 'var(--accent)', display:'flex', alignItems:'center', justifyContent:'center'}}>{(user && user.displayName ? user.displayName[0] : user && user.email ? user.email[0] : 'U').toUpperCase()}</span>
           </button>
         </div>
         {backupIsStale && (
