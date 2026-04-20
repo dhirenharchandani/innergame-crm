@@ -1705,7 +1705,11 @@ const AuthScreen = ({ onAuth, loading }) => {
     if (!email) { setError('Enter your email first'); return; }
     try {
       const { error: resetErr } = await _sb.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + window.location.pathname + '#type=recovery'
+        // Do NOT append '#type=recovery' here — Supabase automatically attaches the
+        // access_token fragment to redirectTo. If we also append '#type=recovery' we end
+        // up with a double-hash URL like '/#type=recovery#access_token=...' which breaks
+        // the Supabase client's URL parser and prevents session establishment.
+        redirectTo: window.location.origin + window.location.pathname
       });
       if (resetErr) throw resetErr;
       setResetSent(true);
