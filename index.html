@@ -2,6 +2,25 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- Content Security Policy — lock down where scripts/styles/connections are allowed to come from.
+     Notes:
+     - 'unsafe-inline' is allowed only for style-src because React inline style={{...}} attributes are everywhere. Script inline is NOT allowed.
+     - 'unsafe-eval' is NOT allowed (we precompile JSX so Babel is gone).
+     - frame-ancestors can't be enforced via <meta> (needs an HTTP header) \u2014 noted as a limitation; GitHub Pages won't let us set it.
+     - Update this when adding a new CDN or backend service. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://browser.sentry-cdn.com;
+  connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.us.sentry.io https://*.ingest.sentry.io;
+  img-src 'self' data: https:;
+  style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+  font-src 'self' https://fonts.gstatic.com data:;
+  worker-src 'self' blob:;
+  manifest-src 'self' data:;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
+">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -33,34 +52,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <!-- Sentry browser SDK for error monitoring -->
 <script src="https://browser.sentry-cdn.com/7.119.0/bundle.min.js" crossorigin="anonymous"></script>
-<script>
-  const SUPABASE_URL = 'https://gdtiqxqtfyefsqhofili.supabase.co';
-  const SUPABASE_ANON_KEY = 'sb_publishable_ILSvvQ9CdTdezM1-yRaSMQ_QSzWgyb8';
-  const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  // Initialize Sentry as early as possible so bootstrap errors are captured
-  if (window.Sentry) {
-    Sentry.init({
-      dsn: 'https://02b1e3829d72893309f490b800233dec@o4511252877148160.ingest.us.sentry.io/4511252884619264',
-      release: 'innergame-crm@' + (document.documentElement.dataset.build || 'unknown'),
-      environment: (location.hostname === 'crm.myinnergame.com' ? 'production' : 'dev'),
-      // Keep the sample rate low on free tier (5k events/mo)
-      sampleRate: 1.0,
-      tracesSampleRate: 0.0, // no performance tracing for now
-      // Don't send requests from localhost to avoid burning quota during dev
-      beforeSend(event) {
-        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return null;
-        return event;
-      },
-      // Ignore noisy errors
-      ignoreErrors: [
-        'ResizeObserver loop limit exceeded',
-        'ResizeObserver loop completed with undelivered notifications',
-        'Non-Error promise rejection captured',
-      ],
-    });
-  }
-</script>
+<script src="init.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
