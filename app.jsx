@@ -2108,6 +2108,16 @@ const AppWrapper = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Force dark mode on pre-auth screens (login / password recovery /
+  // welcome-import). Once the user is authenticated the App component
+  // applies their own saved theme preference.
+  useEffect(() => {
+    const preAuth = !currentUser || isRecovery;
+    if (preAuth) {
+      document.documentElement.classList.add('dark');
+    }
+  }, [currentUser, isRecovery]);
+
   // Load cloud data when user is authenticated.
   // Depend on currentUser?.id (not the whole user object) so token refreshes
   // don't re-trigger a cloud fetch when the session rolls over.
