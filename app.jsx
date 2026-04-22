@@ -651,6 +651,24 @@ const TodayView = ({ contacts, stages, onSelectContact, onUpdateContact, cadence
   );
 };
 
+// ─── Sparkline (inline SVG mini-chart) ───
+const Sparkline = ({ values, color = '#3b82f6', width = 120, height = 32, fill = true }) => {
+  if (!values || values.length < 2) return <div style={{width, height}} />;
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = max - min || 1;
+  const step = width / (values.length - 1);
+  const points = values.map((v, i) => [i * step, height - ((v - min) / range) * (height - 4) - 2]);
+  const line = points.map(([x, y]) => x.toFixed(1) + ',' + y.toFixed(1)).join(' ');
+  const area = 'M ' + line + ' L ' + width + ',' + height + ' L 0,' + height + ' Z';
+  return (
+    <svg width={width} height={height} viewBox={'0 0 ' + width + ' ' + height} style={{display:'block'}}>
+      {fill && <path d={area} fill={color} opacity="0.12" />}
+      <polyline points={line} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
 // ─── DashboardView ───
 const DashboardView = ({ contacts, stages }) => {
   const stgs = stages || DEFAULT_STAGES;
@@ -660,36 +678,151 @@ const DashboardView = ({ contacts, stages }) => {
   const overdue = contacts.filter(c => c.nextFollowUp && c.nextFollowUp < today()).length;
   const dueToday = contacts.filter(c => c.nextFollowUp === today()).length;
 
-  // Funnel data: stages with contacts, sorted by count descending for funnel shape
-  const funnelData = stgs.map(stage => {
+  // 30-day daily series for sparklines.
+  // Uses createdAt for cumulative contacts/$ and lastContactDate for activity.
+  const trends = useMemo(() => {
+    const DAYS = 30;
+    const now = new Date(); now.setHours(0,0,0,0);
+    const dayKey = (d) => new Date(d).toISOString().split('T')[0];
+    const series = Array.from({length: DAYS}, (_, i) => {
+      const d = new Date(now); d.setDate(d.getDate() - (DAYS - 1 - i));
+      return { key: dayKey(d), contacts: 0, value: 0, weighted: 0, touches: 0 };
+    });
+    const idx = Object.fromEntries(series.map((s, i) => [s.key, i]));
+    contacts.forEach(c => {
+      if (c.createdAt) {
+        const k = dayKey(c.createdAt);
+        if (idx[k] !== undefined) {
+          series[idx[k]].contacts += 1;
+          series[idx[k]].value += (c.dealValue || 0);
+          series[idx[k]].weighted += (c.dealValue || 0) * getStageProbability(c.stage);
+        }
+      }
+      if (c.lastContactDate && idx[c.lastContactDate] !== undefined) {
+        series[idx[c.lastContactDate]].touches += 1;
+      }
+    });
+    // Cumulative for growth metrics; touches stays daily for activity feel
+    let cC = 0, cV = 0, cW = 0;
+    const contactsSeries = [], valueSeries = [], weightedSeries = [], touchesSeries = [];
+    series.forEach(s => {
+      cC += s.contacts; cV += s.value; cW += s.weighted;
+      contactsSeries.push(cC); valueSeries.push(cV); weightedSeries.push(cW);
+      touchesSeries.push(s.touches);
+    });
+    return { contactsSeries, valueSeries, weightedSeries, touchesSeries };
+  }, [contacts]);
+
+  // Delta vs 30 days ago (first vs last cumulative value)
+  const delta = (arr) => {
+    const first = arr[0] || 0;
+    const last = arr[arr.length - 1] || 0;
+    return last - first;
+  };
+  const contactsDelta = delta(trends.contactsSeries);
+  const valueDelta = delta(trends.valueSeries);
+  const weightedDelta = delta(trends.weightedSeries);
+  const touchesSum = trends.touchesSeries.reduce((s, n) => s + n, 0);
+
+  // Funnel: all stages in pipeline order, count + $, with conversion % to the next stage
+  const funnel = stgs.map(stage => {
     const stageContacts = contacts.filter(c => c.stage === stage);
     const count = stageContacts.length;
     const value = stageContacts.reduce((s, c) => s + (c.dealValue || 0), 0);
-    const weighted = stageContacts.reduce((s, c) => s + (c.dealValue || 0) * getStageProbability(c.stage), 0);
-    const prob = getStageProbability(stage);
-    return { stage, count, value, weighted, prob, color: getStageColor(stage) };
-  }).filter(d => d.count > 0);
-  const maxCount = Math.max(...funnelData.map(d => d.count), 1);
+    return { stage, count, value, color: getStageColor(stage) };
+  });
+  const maxFunnelCount = Math.max(...funnel.map(d => d.count), 1);
 
-  // Avg days in stage
-  const stageVelocity = stgs.map(stage => {
-    const sc = contacts.filter(c => c.stage === stage && c.stageChangedAt);
-    if (sc.length === 0) return null;
-    const avgDays = sc.reduce((s, c) => s + daysBetween(c.stageChangedAt.split('T')[0], today()), 0) / sc.length;
-    return { stage, avgDays: Math.round(avgDays), count: sc.length, color: getStageColor(stage) };
-  }).filter(Boolean);
+  const fmtMoney = (n) => n >= 1000 ? '$' + (n/1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : '$' + n.toLocaleString();
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <div className="stat-card rounded-xl p-4"><div className="text-sm text-gray-500">Total Contacts</div><div className="text-3xl font-bold text-blue-600">{totalContacts}</div></div>
-        <div className="stat-card rounded-xl p-4"><div className="text-sm text-gray-500">Pipeline Value</div><div className="text-3xl font-bold text-green-600">${totalDealValue.toLocaleString()}</div></div>
-        <div className="stat-card rounded-xl p-4"><div className="text-sm text-gray-500">Weighted Value</div><div className="text-3xl font-bold text-emerald-600">${Math.round(weightedValue).toLocaleString()}</div><div className="text-xs text-gray-400 mt-1">probability-adjusted</div></div>
-        <div className="stat-card rounded-xl p-4"><div className="text-sm text-gray-500">Overdue</div><div className="text-3xl font-bold text-red-600">{overdue}</div></div>
-        <div className="stat-card rounded-xl p-4"><div className="text-sm text-gray-500">Due Today</div><div className="text-3xl font-bold text-orange-500">{dueToday}</div></div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="stat-card rounded-xl p-4">
+          <div className="flex items-start justify-between mb-1">
+            <div className="text-sm text-gray-500">Total Contacts</div>
+            {contactsDelta !== 0 && <div className="text-xs font-medium" style={{color: contactsDelta > 0 ? '#059669' : '#dc2626'}}>{contactsDelta > 0 ? '+' : ''}{contactsDelta} / 30d</div>}
+          </div>
+          <div className="text-3xl font-bold text-blue-600">{totalContacts}</div>
+          <div className="mt-2"><Sparkline values={trends.contactsSeries} color="#3b82f6" /></div>
+        </div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="flex items-start justify-between mb-1">
+            <div className="text-sm text-gray-500">Pipeline Value</div>
+            {valueDelta !== 0 && <div className="text-xs font-medium" style={{color: valueDelta > 0 ? '#059669' : '#dc2626'}}>{valueDelta > 0 ? '+' : ''}{fmtMoney(valueDelta)} / 30d</div>}
+          </div>
+          <div className="text-3xl font-bold text-green-600">${totalDealValue.toLocaleString()}</div>
+          <div className="mt-2"><Sparkline values={trends.valueSeries} color="#059669" /></div>
+        </div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="flex items-start justify-between mb-1">
+            <div className="text-sm text-gray-500">Weighted Value</div>
+            {weightedDelta !== 0 && <div className="text-xs font-medium" style={{color: weightedDelta > 0 ? '#059669' : '#dc2626'}}>{weightedDelta > 0 ? '+' : ''}{fmtMoney(weightedDelta)} / 30d</div>}
+          </div>
+          <div className="text-3xl font-bold text-emerald-600">${Math.round(weightedValue).toLocaleString()}</div>
+          <div className="text-xs text-gray-400 mt-1">probability-adjusted</div>
+          <div className="mt-1"><Sparkline values={trends.weightedSeries} color="#10b981" /></div>
+        </div>
+
+        <div className="stat-card rounded-xl p-4">
+          <div className="flex items-start justify-between mb-1">
+            <div className="text-sm text-gray-500">Activity (30d)</div>
+            <div className="text-xs font-medium text-gray-400">{overdue} overdue &middot; {dueToday} today</div>
+          </div>
+          <div className="text-3xl font-bold text-purple-600">{touchesSum}</div>
+          <div className="text-xs text-gray-400 mt-1">contacts reached</div>
+          <div className="mt-1"><Sparkline values={trends.touchesSeries} color="#8b5cf6" fill={true} /></div>
+        </div>
       </div>
 
+      {/* Pipeline Funnel */}
+      <div className="bg-white rounded-xl border p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Pipeline Funnel</h2>
+          <div className="text-xs text-gray-400">count &middot; $ value &middot; stage-to-stage %</div>
+        </div>
+        {totalContacts === 0 ? (
+          <div className="text-center text-gray-400 py-8 text-sm">Add contacts to see your pipeline funnel.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {funnel.map((row, i) => {
+              const widthPct = Math.max(3, (row.count / maxFunnelCount) * 100);
+              const next = funnel[i + 1];
+              const conversion = next && row.count > 0 ? Math.round((next.count / row.count) * 100) : null;
+              return (
+                <div key={row.stage}>
+                  <div className="flex items-center gap-3 py-1.5">
+                    <div className="w-36 text-sm truncate flex items-center gap-2 flex-shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background: row.color}}></span>
+                      <span className="truncate">{row.stage}</span>
+                    </div>
+                    <div className="flex-1 relative h-8 bg-gray-50 rounded-md overflow-hidden">
+                      <div className="absolute inset-y-0 left-0 rounded-md flex items-center px-3 text-xs font-medium text-white" style={{width: widthPct + '%', background: row.color, minWidth: row.count > 0 ? '2.5rem' : 0}}>
+                        {row.count > 0 && <span>{row.count}</span>}
+                      </div>
+                    </div>
+                    <div className="w-24 text-right text-sm flex-shrink-0" style={{color: row.value > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)'}}>
+                      {row.value > 0 ? fmtMoney(row.value) : '\u2014'}
+                    </div>
+                  </div>
+                  {conversion !== null && row.count > 0 && (
+                    <div className="flex items-center gap-3 pl-36">
+                      <div className="flex-1 flex items-center gap-2 pl-2">
+                        <span className="text-xs text-gray-400">&darr; {conversion}% advance</span>
+                      </div>
+                      <div className="w-24" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
