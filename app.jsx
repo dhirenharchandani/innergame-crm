@@ -8,6 +8,12 @@ const IDB_KEY = 'latest';
 
 // Per-user storage keys (set after auth)
 let CURRENT_UID = null;
+// Current access token, kept in sync via onAuthStateChange — used by the
+// beforeunload flush since Supabase v2 has no _sb.auth.session accessor.
+let CURRENT_ACCESS_TOKEN = null;
+// Hash of the last payload we successfully cloud-saved, so we can skip
+// redundant POSTs when React re-renders without meaningful data changes.
+let LAST_SAVED_PAYLOAD_JSON = null;
 let STORAGE_KEY, BACKUP_KEY, MASTER_VERSION_KEY, LAST_BACKUP_DOWNLOAD_KEY, IDB_NAME;
 const initStorageKeys = (uid) => {
   CURRENT_UID = uid;
@@ -1475,6 +1481,7 @@ const cloudSave = async (data) => {
       updated_at: new Date().toISOString()
     });
     if (error) throw error;
+    try { LAST_SAVED_PAYLOAD_JSON = JSON.stringify(data); } catch(_) { LAST_SAVED_PAYLOAD_JSON = null; }
     console.log('[CRM] Cloud save OK (' + (data.contacts||[]).length + ' contacts)');
     setCloudSaveStatus('saved');
   } catch(e) {
@@ -1796,24 +1803,38 @@ const AppWrapper = () => {
   // Listen to Supabase auth state
   useEffect(() => {
     _sb.auth.getSession().then(({ data: { session } }) => {
+      CURRENT_ACCESS_TOKEN = session?.access_token || null;
       const user = session?.user || null;
       if (user) initStorageKeys(user.id);
       if (window.Sentry) Sentry.setUser(user ? { id: user.id, email: user.email } : null);
       setCurrentUser(user);
       setAuthChecked(true);
+    }).catch(e => {
+      console.error('[CRM] getSession failed:', e);
+      if (window.Sentry) Sentry.captureException(e);
+      // Fail open — let the user see the auth screen rather than hang on skeleton.
+      setAuthChecked(true);
     });
     const { data: { subscription } } = _sb.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') setIsRecovery(true);
+      CURRENT_ACCESS_TOKEN = session?.access_token || null;
       const user = session?.user || null;
       if (user) initStorageKeys(user.id);
       if (window.Sentry) Sentry.setUser(user ? { id: user.id, email: user.email } : null);
-      setCurrentUser(user);
+      setCurrentUser(prev => {
+        // Avoid triggering downstream effects when the user identity didn't change
+        // (onAuthStateChange fires on token refresh too).
+        if (prev && user && prev.id === user.id) return prev;
+        return user;
+      });
       setAuthChecked(true);
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load cloud data when user is authenticated
+  // Load cloud data when user is authenticated.
+  // Depend on currentUser?.id (not the whole user object) so token refreshes
+  // don't re-trigger a cloud fetch when the session rolls over.
   // NOTE: Must be declared BEFORE any conditional returns to satisfy Rules of Hooks
   useEffect(() => {
     if (!currentUser) return;
@@ -1822,8 +1843,13 @@ const AppWrapper = () => {
     cloudLoad().then(d => {
       setCloudData(d || null);
       if (d) setMigrationDone(true);
+    }).catch(e => {
+      console.error('[CRM] cloudLoad failed:', e);
+      if (window.Sentry) Sentry.captureException(e);
+      // Fall through to WelcomeScreen rather than hang on the skeleton
+      setCloudData(null);
     });
-  }, [currentUser]);
+  }, [currentUser?.id]);
 
   // If we're in a password recovery flow, show the reset screen
   if (isRecovery) {
@@ -1918,11 +1944,19 @@ const App = ({ user, initialCloudData }) => {
     return diffDays > BACKUP_REMINDER_DAYS;
   }, [lastBackupDownload, data.contacts]);
 
-  // Save locally immediately; debounce cloud save to avoid collisions on rapid edits
+  // Save locally immediately; debounce cloud save to avoid collisions on rapid edits.
+  // Skip the cloud POST entirely if the payload hasn't changed since the last
+  // successful save (prevents redundant writes on harmless re-renders).
   const pendingCloudData = useRef(null);
   useEffect(() => {
     saveData(data);
     if (user && CURRENT_UID) {
+      let currentJson;
+      try { currentJson = JSON.stringify(data); } catch(_) { currentJson = null; }
+      if (currentJson && currentJson === LAST_SAVED_PAYLOAD_JSON) {
+        // Nothing changed — skip the network round-trip.
+        return;
+      }
       pendingCloudData.current = data;
       const handle = setTimeout(() => {
         cloudSave(data);
@@ -1939,6 +1973,10 @@ const App = ({ user, initialCloudData }) => {
         setData(betterData);
         console.log('[CRM] IDB fallback provided more contacts: ' + betterData.contacts.length + ' vs ' + (data.contacts || []).length);
       }
+    }).catch(e => {
+      console.warn('[CRM] IDB fallback check failed:', e);
+      if (window.Sentry) Sentry.captureException(e);
+      // Non-fatal — keep whatever data we already have from localStorage
     });
   }, []);
 
@@ -1964,7 +2002,7 @@ const App = ({ user, initialCloudData }) => {
               method: 'POST',
               headers: {
                 'apikey': SUPABASE_ANON_KEY,
-                'Authorization': 'Bearer ' + (_sb.auth.session?.access_token || SUPABASE_ANON_KEY),
+                'Authorization': 'Bearer ' + (CURRENT_ACCESS_TOKEN || SUPABASE_ANON_KEY),
                 'Content-Type': 'application/json',
                 'Prefer': 'resolution=merge-duplicates'
               },
