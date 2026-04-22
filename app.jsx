@@ -568,7 +568,7 @@ const TodayView = ({ contacts, stages, onSelectContact, onUpdateContact, cadence
   const part = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
   const rawName = (user && user.user_metadata && user.user_metadata.display_name) || (user && user.email ? user.email.split('@')[0] : '');
   const firstName = rawName ? rawName.split(' ')[0] : '';
-  const greeting = 'Good ' + part + (firstName ? ', ' + firstName : '');
+  const greeting = 'Great ' + part + (firstName ? ', ' + firstName : '');
 
   return (
     <div>
