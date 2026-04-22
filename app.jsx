@@ -1365,6 +1365,56 @@ const StagnationEditor = ({ stages, stagnation, onUpdate }) => {
   );
 };
 
+// ─── PasswordChanger ───
+const PasswordChanger = () => {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (next.length < 8) { setError('New password must be at least 8 characters'); return; }
+    if (!/[A-Za-z]/.test(next) || !/[0-9]/.test(next)) { setError('New password needs at least one letter and one number'); return; }
+    if (next !== confirm) { setError('New password and confirmation don\u2019t match'); return; }
+    if (next === current) { setError('New password must be different from the current password'); return; }
+    setBusy(true);
+    try {
+      // Reauthenticate with the current password so we don't let a hijacked
+      // session silently rotate credentials.
+      const { data: { user } } = await _sb.auth.getUser();
+      if (!user || !user.email) throw new Error('No active session');
+      const { error: signErr } = await _sb.auth.signInWithPassword({ email: user.email, password: current });
+      if (signErr) { setError('Current password is incorrect'); setBusy(false); return; }
+      const { error: updErr } = await _sb.auth.updateUser({ password: next });
+      if (updErr) throw updErr;
+      setCurrent(''); setNext(''); setConfirm('');
+      toast('Password updated', 'success');
+    } catch(err) {
+      setError(err.message || 'Could not update password');
+      if (window.Sentry) Sentry.captureException(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h3 className="font-semibold mb-2">Change Password</h3>
+      <p className="text-sm text-gray-500 mb-3">We'll ask for your current password to confirm it's you.</p>
+      <div className="space-y-2 max-w-md">
+        <input type="password" autoComplete="current-password" value={current} onChange={e => setCurrent(e.target.value)} placeholder="Current password" className="w-full" disabled={busy} />
+        <input type="password" autoComplete="new-password" value={next} onChange={e => setNext(e.target.value)} placeholder="New password (8+ chars, letter + number)" className="w-full" disabled={busy} />
+        <input type="password" autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Confirm new password" className="w-full" disabled={busy} />
+        {error && <div className="text-sm text-red-600">{error}</div>}
+        <button type="submit" disabled={busy || !current || !next || !confirm} className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50" style={{background: 'var(--accent)'}}>{busy ? 'Updating\u2026' : 'Update password'}</button>
+      </div>
+    </form>
+  );
+};
+
 // ─── SettingsView ───
 const SettingsView = ({ stages, onUpdateStages, onRenameStage, cadence, onUpdateCadence, stagnation, onUpdateStagnation, contacts, onExport, onRestoreBackup, onDownloadJSON, onRestoreFile, onRestorePreUpdate }) => {
   const fileRef = useRef();
@@ -1441,6 +1491,7 @@ const SettingsView = ({ stages, onUpdateStages, onRenameStage, cadence, onUpdate
           );
         })()}
       </div>
+      <div className="bg-white rounded-xl border p-4 mb-6"><PasswordChanger /></div>
       <div className="bg-white rounded-xl border p-4">
         <h3 className="font-semibold mb-2">About</h3>
         <p className="text-sm text-gray-500">Innergame CRM v{STORAGE_VERSION}</p>
