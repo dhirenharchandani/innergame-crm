@@ -89,9 +89,24 @@ const computeHash = async (str) => {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
-const MASTER_DATA = {"version": 7, "contacts": [], "stages": [], "cadence": {}};
+// Pipeline stages shipped with the app. Users can rename / reorder these
+// from Settings — we just need a non-empty starting set so the Pipeline
+// view and cadence editor have something to render.
+const DEFAULT_STAGES = [
+  'New Lead', 'Contacted', 'Qualified',
+  'Proposal Sent', 'Negotiation',
+  'Closed Won', 'Closed Lost'
+];
 
-const DEFAULT_STAGES = MASTER_DATA.stages;
+const DEFAULT_CADENCE = {
+  'New Lead': 3, 'Contacted': 5, 'Qualified': 7,
+  'Proposal Sent': 5, 'Negotiation': 3,
+  'Closed Won': 30, 'Closed Lost': 30
+};
+
+// MASTER_DATA seeds a fresh-install (no cloud row yet). Contacts stay empty
+// so new users start clean; stages + cadence come from the real defaults.
+const MASTER_DATA = { version: 7, contacts: [], stages: [...DEFAULT_STAGES], cadence: {...DEFAULT_CADENCE} };
 
 const STAGE_COLORS = {
   'New Lead': '#3b82f6', 'Contacted': '#06b6d4',
@@ -101,12 +116,6 @@ const STAGE_COLORS = {
 };
 
 const FALLBACK_COLORS = ['#6366f1','#ec4899','#f97316','#84cc16','#0ea5e9','#a855f7','#14b8a6','#f43f5e','#eab308','#64748b'];
-
-const DEFAULT_CADENCE = MASTER_DATA.cadence || {
-  'New Lead': 3, 'Contacted': 5, 'Qualified': 7,
-  'Proposal Sent': 5, 'Negotiation': 3,
-  'Closed Won': 30, 'Closed Lost': 30
-};
 
 const STAGNATION = {
   'New Lead': 14, 'Contacted': 10, 'Qualified': 14,
@@ -185,8 +194,10 @@ const exportContactsToCSV = (contacts) => {
 const getDefaultData = () => migrateData(JSON.parse(JSON.stringify(MASTER_DATA)));
 
 const migrateData = (data) => {
-  if (!data.stages) data.stages = DEFAULT_STAGES;
-  if (!data.cadence) data.cadence = {...DEFAULT_CADENCE};
+  // Repopulate stages/cadence if they're missing OR empty — a previous build
+  // accidentally saved empty collections to the cloud.
+  if (!Array.isArray(data.stages) || data.stages.length === 0) data.stages = [...DEFAULT_STAGES];
+  if (!data.cadence || typeof data.cadence !== 'object' || Object.keys(data.cadence).length === 0) data.cadence = {...DEFAULT_CADENCE};
   const cad = data.cadence;
   const t = today();
   data.contacts = (data.contacts || []).map(c => {
