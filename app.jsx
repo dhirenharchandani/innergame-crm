@@ -2238,7 +2238,15 @@ const App = ({ user, initialCloudData }) => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="desktop-topbar border-b px-4 py-3 flex items-center gap-3" style={{background: 'var(--topbar-bg)'}}>
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-gray-400 hover:text-gray-600" title="Toggle sidebar"><Icon name="menu" size={20} /></button>
-          <div className="flex-1" />
+          <div className="flex-1 min-w-0">
+            {(() => {
+              const h = new Date().getHours();
+              const part = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+              const raw = (user && user.user_metadata && user.user_metadata.display_name) || (user && user.email ? user.email.split('@')[0] : '');
+              const name = raw ? raw.split(' ')[0] : '';
+              return <span className="text-sm font-medium truncate" style={{color: 'var(--text-primary)'}}>Good {part}{name ? ', ' + name : ''}</span>;
+            })()}
+          </div>
           {lastAutoBackup && <span className="backup-text text-xs text-gray-400 flex items-center gap-1" title="Auto-backup runs every 30 minutes"><Icon name="save" size={13} /> Backed up {lastAutoBackup.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>}
           <button onClick={() => { doAutoBackup(); toast('Backup saved', 'success'); }} className="backup-text text-xs text-gray-400 hover:text-blue-500 cursor-pointer" title="Save backup now"><Icon name="refresh" size={14} /></button>
           <button onClick={handleDownloadJSON} className={"px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 " + (backupIsStale ? "bg-amber-500 text-white hover:bg-amber-600" : "")} style={backupIsStale ? {} : {background: 'var(--bg-tertiary)', color: 'var(--text-secondary)'}} title={lastBackupDownload ? "Last downloaded: " + lastBackupDownload.toLocaleDateString() : "Never downloaded a backup"}>
