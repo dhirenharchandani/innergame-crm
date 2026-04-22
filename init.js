@@ -1,4 +1,4 @@
-// Innergame CRM bootstrap — initializes Supabase + Sentry before app.js runs.
+// InnerGame CRM bootstrap — initializes Supabase + Sentry before app.js runs.
 // Kept as a separate file (not inline) so our CSP can drop 'unsafe-inline' for scripts.
 
 const SUPABASE_URL = 'https://gdtiqxqtfyefsqhofili.supabase.co';

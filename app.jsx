@@ -1630,7 +1630,7 @@ const SettingsView = ({ stages, onUpdateStages, onRenameStage, cadence, onUpdate
       <div className="bg-white rounded-xl border p-4 mb-6"><PasswordChanger /></div>
       <div className="bg-white rounded-xl border p-4">
         <h3 className="font-semibold mb-2">About</h3>
-        <p className="text-sm text-gray-500">Innergame CRM v{STORAGE_VERSION}</p>
+        <p className="text-sm text-gray-500">InnerGame CRM v{STORAGE_VERSION}</p>
         <p className="text-sm text-gray-500">Data stored locally in your browser. {contacts.length} contacts loaded.</p>
       </div>
     </div>
@@ -1826,7 +1826,7 @@ const AuthScreen = ({ onAuth, loading }) => {
           </button>
         </div>
         <div className="text-center text-xs mt-6" style={{color: 'var(--text-tertiary)'}}>
-          Developed by Innergame Consulting
+          Developed by InnerGame Consulting
         </div>
       </div>
     );
@@ -1836,7 +1836,7 @@ const AuthScreen = ({ onAuth, loading }) => {
     <div className="login-screen">
       <div className="login-card">
         <div style={{fontSize: '48px', marginBottom: '16px'}}>{'\uD83C\uDF31'}</div>
-        <h1 className="text-2xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>Innergame CRM</h1>
+        <h1 className="text-2xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>InnerGame CRM</h1>
         <p className="text-sm mb-6" style={{color: 'var(--text-secondary)'}}>
           {mode === 'login' ? 'Sign in to your CRM' : 'Create your account'}
         </p>
@@ -1877,7 +1877,7 @@ const AuthScreen = ({ onAuth, loading }) => {
         )}
       </div>
       <div className="text-center text-xs mt-6" style={{color: 'var(--text-tertiary)'}}>
-        Developed by Innergame Consulting
+        Developed by InnerGame Consulting
       </div>
     </div>
   );
@@ -2439,7 +2439,7 @@ const App = ({ user, initialCloudData }) => {
         <EmptyState
           icon={<Icon name="userplus" size={32} />}
           title="Add your first contact to get started"
-          body="Innergame CRM is empty. Add a person you want to track, or import an existing list from CSV. The Dashboard and pipeline views will fill in once you have contacts."
+          body="InnerGame CRM is empty. Add a person you want to track, or import an existing list from CSV. The Dashboard and pipeline views will fill in once you have contacts."
           ctaLabel="+ Add first contact"
           onCta={handleAddContact}
           secondaryLabel="Import from CSV"
@@ -2464,7 +2464,7 @@ const App = ({ user, initialCloudData }) => {
   return (
     <div className="flex h-screen" style={{background: 'var(--bg-primary)', color: 'var(--text-primary)'}}>
       <div className={'desktop-sidebar ' + (sidebarOpen ? 'w-56' : 'w-0') + ' border-r flex-shrink-0 transition-all overflow-hidden'} style={{background: 'var(--sidebar-bg)'}}>
-        <div className="p-4 border-b"><h1 className="text-lg font-bold" style={{color: 'var(--accent)'}}>Innergame CRM</h1></div>
+        <div className="p-4 border-b"><h1 className="text-lg font-bold" style={{color: 'var(--accent)'}}>InnerGame CRM</h1></div>
         <nav className="p-3 space-y-1">{tabs.map(tab => (
           <div key={tab.id} className={'sidebar-item text-sm ' + (activeTab === tab.id ? 'active' : '')} onClick={() => setActiveTab(tab.id)}>
             <span>{tab.icon}</span><span>{tab.label}</span>
@@ -2549,7 +2549,7 @@ const App = ({ user, initialCloudData }) => {
           <div className="main-content flex-1 overflow-y-auto p-6">
             {renderContent()}
             <div className="app-footer text-center text-xs mt-8 pt-4 pb-2" style={{color: 'var(--text-tertiary)', borderTop: '1px solid var(--border-light)'}}>
-              Developed by Innergame Consulting
+              Developed by InnerGame Consulting
             </div>
           </div>
           {selectedContact && <ContactDetail contact={selectedContact} onClose={() => setSelectedContact(null)} onUpdate={handleUpdateContact} stages={stages} onDelete={handleDeleteContact} cadence={cadence} />}
@@ -2664,7 +2664,7 @@ const ConfirmHost = () => {
 // ─── Onboarding tour (first-time users) ───
 const ONBOARD_KEY = 'bloom-crm-onboarded';
 const ONBOARD_STEPS = [
-  { title: 'Welcome to Innergame CRM', body: 'Let\u2019s take 30 seconds to get oriented. You can always skip and come back later.' },
+  { title: 'Welcome to InnerGame CRM', body: 'Let\u2019s take 30 seconds to get oriented. You can always skip and come back later.' },
   { title: 'Start in Today', body: 'The Today tab shows who needs attention right now \u2014 overdue follow-ups, today\u2019s tasks, and stale contacts. Start every day here.' },
   { title: 'Contacts are your foundation', body: 'Add people you want to track. Drag them through pipeline stages, log notes, and the CRM will remind you when to follow up.' },
   { title: 'Deals and reports', body: 'When money is involved, the Deals view shows your pipeline by value. Open the More menu on mobile to find Weekly Digest and Source ROI.' },
