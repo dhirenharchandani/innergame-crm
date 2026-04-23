@@ -1873,11 +1873,8 @@ const AuthScreen = ({ onAuth, loading }) => {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <img src="logo-mark.png" alt="InnerGame" style={{maxWidth: '220px', width: '100%', height: 'auto', display: 'block', margin: '0 auto 16px'}} />
-        <div className="text-center mb-6">
-          <div className="text-lg font-semibold" style={{color: 'var(--text-primary)'}}>CRM</div>
-          <div className="text-sm mt-1" style={{color: 'var(--text-secondary)'}}>{mode === 'login' ? 'Sign in to your CRM' : 'Create your account'}</div>
-        </div>
+        <img src="logo.png" alt="InnerGame CRM" style={{maxWidth: '280px', width: '100%', height: 'auto', display: 'block', margin: '0 auto 24px'}} />
+
         {loading ? (
           <div>
             <div className="skeleton" style={{height:44,borderRadius:8,marginBottom:12}} />
