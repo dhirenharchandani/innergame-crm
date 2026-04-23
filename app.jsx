@@ -1873,11 +1873,11 @@ const AuthScreen = ({ onAuth, loading }) => {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div style={{fontSize: '48px', marginBottom: '16px'}}>{'\uD83C\uDF31'}</div>
-        <h1 className="text-2xl font-bold mb-2" style={{color: 'var(--text-primary)'}}>InnerGame CRM</h1>
-        <p className="text-sm mb-6" style={{color: 'var(--text-secondary)'}}>
-          {mode === 'login' ? 'Sign in to your CRM' : 'Create your account'}
-        </p>
+        <img src="logo-mark.png" alt="InnerGame" style={{maxWidth: '220px', width: '100%', height: 'auto', display: 'block', margin: '0 auto 16px'}} />
+        <div className="text-center mb-6">
+          <div className="text-lg font-semibold" style={{color: 'var(--text-primary)'}}>CRM</div>
+          <div className="text-sm mt-1" style={{color: 'var(--text-secondary)'}}>{mode === 'login' ? 'Sign in to your CRM' : 'Create your account'}</div>
+        </div>
         {loading ? (
           <div>
             <div className="skeleton" style={{height:44,borderRadius:8,marginBottom:12}} />
@@ -2512,7 +2512,9 @@ const App = ({ user, initialCloudData }) => {
   return (
     <div className="flex h-screen" style={{background: 'var(--bg-primary)', color: 'var(--text-primary)'}}>
       <div className={'desktop-sidebar ' + (sidebarOpen ? 'w-56' : 'w-0') + ' border-r flex-shrink-0 transition-all overflow-hidden'} style={{background: 'var(--sidebar-bg)'}}>
-        <div className="p-4 border-b"><h1 className="text-lg font-bold" style={{color: 'var(--accent)'}}>InnerGame CRM</h1></div>
+        <div className="p-4 border-b flex items-center">
+          <img src={darkMode ? 'logo-mark.png' : 'logo.png'} alt="InnerGame CRM" style={{maxWidth: darkMode ? '130px' : '160px', width: '100%', height: 'auto', display: 'block'}} />
+        </div>
         <nav className="p-3 space-y-1">{tabs.map(tab => (
           <div key={tab.id} className={'sidebar-item text-sm ' + (activeTab === tab.id ? 'active' : '')} onClick={() => setActiveTab(tab.id)}>
             <span>{tab.icon}</span><span>{tab.label}</span>
