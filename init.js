@@ -3,6 +3,40 @@
 
 const SUPABASE_URL = 'https://bcigkiutioahmeuxnaph.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_S5yoeRVzQ66LSk3zdB9sWg_IjxkjjX2';
+
+// Capture recovery markers BEFORE supabase.createClient() runs.
+// detectSessionInUrl fires synchronously inside createClient and consumes the
+// hash, emitting PASSWORD_RECOVERY before our React listener is attached. If
+// we don't snapshot the URL here, AppWrapper has no way to know the user
+// arrived via a reset link — it just sees a fresh session and renders the
+// app, silently logging them in instead of showing the reset password screen.
+window.__INNERGAME_FROM_RECOVERY = (function () {
+  try {
+    var h = window.location.hash || '';
+    var s = window.location.search || '';
+    return (
+      h.indexOf('type=recovery') !== -1 ||
+      s.indexOf('type=recovery') !== -1 ||
+      s.indexOf('action=reset') !== -1
+    );
+  } catch (e) {
+    return false;
+  }
+})();
+
+// Strip the ?action=reset marker from the URL once captured so a page refresh
+// doesn't re-trigger the reset screen after the user has completed the reset.
+// (We leave the hash alone — Supabase needs to read access_token from it.)
+if (window.__INNERGAME_FROM_RECOVERY) {
+  try {
+    var _u = new URL(window.location.href);
+    if (_u.searchParams.has('action')) {
+      _u.searchParams.delete('action');
+      window.history.replaceState({}, '', _u.pathname + _u.search + _u.hash);
+    }
+  } catch (e) { /* ignore — URL constructor missing on ancient browsers */ }
+}
+
 const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Initialize Sentry as early as possible so bootstrap errors are captured

@@ -1833,11 +1833,11 @@ const AuthScreen = ({ onAuth, loading }) => {
     if (!email) { setError('Enter your email first'); return; }
     try {
       const { error: resetErr } = await _sb.auth.resetPasswordForEmail(email, {
-        // Do NOT append '#type=recovery' here — Supabase automatically attaches the
-        // access_token fragment to redirectTo. If we also append '#type=recovery' we end
-        // up with a double-hash URL like '/#type=recovery#access_token=...' which breaks
-        // the Supabase client's URL parser and prevents session establishment.
-        redirectTo: window.location.origin + window.location.pathname
+        // Append a query-param marker so the landing page can detect the user
+        // arrived from a reset link. Query params survive Supabase's redirect
+        // (which appends auth tokens to the hash); using a hash here would
+        // collide with that and break the parser.
+        redirectTo: window.location.origin + window.location.pathname + '?action=reset'
       });
       if (resetErr) throw resetErr;
       setResetSent(true);
@@ -2095,7 +2095,16 @@ const AppWrapper = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [cloudData, setCloudData] = useState(undefined);
   const [migrationDone, setMigrationDone] = useState(false);
-  const [isRecovery, setIsRecovery] = useState(() => window.location.hash.includes('type=recovery'));
+  // Initial recovery detection uses the snapshot taken in init.js BEFORE
+  // Supabase had a chance to consume the URL hash. Falls back to live URL
+  // checks for safety. The PASSWORD_RECOVERY auth event handler below also
+  // sets this, but in practice that event fires before our listener attaches
+  // — so the early snapshot is what actually catches it.
+  const [isRecovery, setIsRecovery] = useState(() =>
+    !!window.__INNERGAME_FROM_RECOVERY ||
+    window.location.hash.includes('type=recovery') ||
+    window.location.search.includes('action=reset')
+  );
 
   // Listen to Supabase auth state
   useEffect(() => {
