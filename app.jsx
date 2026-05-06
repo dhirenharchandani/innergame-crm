@@ -2200,7 +2200,7 @@ const AppWrapper = () => {
       CURRENT_ACCESS_TOKEN = session?.access_token || null;
       const user = session?.user || null;
       if (user) initStorageKeys(user.id);
-      if (window.Sentry) Sentry.setUser(user ? { id: user.id, email: user.email } : null);
+      if (window.Sentry) Sentry.setUser(user ? { id: user.id } : null);
       setCurrentUser(user);
       setAuthChecked(true);
     }).catch(e => {
@@ -2214,7 +2214,7 @@ const AppWrapper = () => {
       CURRENT_ACCESS_TOKEN = session?.access_token || null;
       const user = session?.user || null;
       if (user) initStorageKeys(user.id);
-      if (window.Sentry) Sentry.setUser(user ? { id: user.id, email: user.email } : null);
+      if (window.Sentry) Sentry.setUser(user ? { id: user.id } : null);
       setCurrentUser(prev => {
         // Avoid triggering downstream effects when the user identity didn't change
         // (onAuthStateChange fires on token refresh too).
@@ -2397,7 +2397,12 @@ const App = ({ user, initialCloudData }) => {
         localStorage.setItem(STORAGE_KEY, json);
         idbSave(data);
         // Flush pending debounced cloud save using sendBeacon for reliability
-        if (user && CURRENT_UID && pendingCloudData.current) {
+        // Skip the beacon write entirely if we don't have a user JWT.
+        // Falling back to the publishable anon key as a Bearer token would
+        // submit a write whose JWT does not bind to CURRENT_UID — relying
+        // on RLS to reject anon writes. Safer to drop the write: data is
+        // already persisted to localStorage/IDB and re-syncs on next sign-in.
+        if (user && CURRENT_UID && CURRENT_ACCESS_TOKEN && pendingCloudData.current) {
           try {
             const body = JSON.stringify({
               user_id: CURRENT_UID,
@@ -2405,13 +2410,12 @@ const App = ({ user, initialCloudData }) => {
               updated_at: new Date().toISOString()
             });
             const url = SUPABASE_URL + '/rest/v1/crm_data';
-            const blob = new Blob([body], { type: 'application/json' });
             // sendBeacon cannot add auth headers; fall back to sync-ish fetch keepalive
             fetch(url, {
               method: 'POST',
               headers: {
                 'apikey': SUPABASE_ANON_KEY,
-                'Authorization': 'Bearer ' + (CURRENT_ACCESS_TOKEN || SUPABASE_ANON_KEY),
+                'Authorization': 'Bearer ' + CURRENT_ACCESS_TOKEN,
                 'Content-Type': 'application/json',
                 'Prefer': 'resolution=merge-duplicates'
               },

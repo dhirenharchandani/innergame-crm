@@ -48,6 +48,11 @@ if (window.Sentry) {
     // Keep the sample rate low on free tier (5k events/mo)
     sampleRate: 1.0,
     tracesSampleRate: 0.0, // no performance tracing for now
+    // Suppress Sentry's default PII collection (client IP, headers like
+    // user-agent attached to events). User identity is set explicitly via
+    // Sentry.setUser({ id }) elsewhere — without email — so we collect the
+    // minimum needed to correlate errors to a user without leaking contact data.
+    sendDefaultPii: false,
     // Don't send requests from localhost to avoid burning quota during dev
     beforeSend(event) {
       if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return null;

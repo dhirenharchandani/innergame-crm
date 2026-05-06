@@ -48,13 +48,28 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
-<!-- Supabase SDK -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Third-party scripts are SRI-pinned. Without integrity hashes a CDN
+     compromise would silently take over every signed-in user. If you bump a
+     version, regenerate the hash with:
+       curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A
+     and update both `src` and `integrity`. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"
+        integrity="sha384-tMH8h3BGESGckSAVGZ82T9n90ztNXxvdwvdM6UoR56cYcf+0iGXBliJ29D+wZ/x8"
+        crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
+        integrity="sha384-bm7MnzvK++ykSwVJ2tynSE5TRdN+xL418osEVF2DE/L/gfWHj91J2Sphe582B1Bh"
+        crossorigin="anonymous"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet"
+      integrity="sha384-HtMZLkYo+pR5/u7zCzXxMJP6QoNnQJt1qkHM0EaOPvGDIzaVZbmYr/TlvUZ/sKAg"
+      crossorigin="anonymous">
+<!-- Supabase SDK — pinned to a specific version (was floating @2). -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.3/dist/umd/supabase.min.js"
+        integrity="sha384-iWpUQPQzWsFiosLgsS8o+e6E8y3Gm+EW2m/vAAo7A2H3fuc4KOKEx+5CAord2H2z"
+        crossorigin="anonymous"></script>
 <!-- Sentry browser SDK for error monitoring -->
-<script src="https://browser.sentry-cdn.com/7.119.0/bundle.min.js" crossorigin="anonymous"></script>
+<script src="https://browser.sentry-cdn.com/7.119.0/bundle.min.js"
+        integrity="sha384-N/+t7zuoySxu9rbUlySpn5qv9w/rBT0D7HE35N2dXNy/1W68iV8i6hc13TPJnKOB"
+        crossorigin="anonymous"></script>
 <script src="init.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
