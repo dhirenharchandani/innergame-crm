@@ -201,6 +201,7 @@ const migrateData = (data) => {
   if (!data.stagnation || typeof data.stagnation !== 'object' || Object.keys(data.stagnation).length === 0) data.stagnation = {...DEFAULT_STAGNATION};
   const cad = data.cadence;
   const t = today();
+  if (typeof data.scratchpad !== 'string') data.scratchpad = '';
   data.contacts = (data.contacts || []).map(c => {
     const migrated = {
       ...c,
@@ -210,6 +211,7 @@ const migrateData = (data) => {
       tags: c.tags || [],
       interactions: c.interactions || [],
       notesTimeline: c.notesTimeline || [],
+      attachments: c.attachments || [],
       monthlyRevenue: c.monthlyRevenue || 0,
       createdAt: c.createdAt || new Date().toISOString(),
       lastContactDate: c.lastContactDate || c.lastContacted || '',
@@ -336,6 +338,8 @@ const ContactDetail = ({ contact, onClose, onUpdate, stages, onDelete, cadence }
   const [tagInput, setTagInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
   const [noteType, setNoteType] = useState('General');
+  const [attachLabel, setAttachLabel] = useState('');
+  const [attachUrl, setAttachUrl] = useState('');
   const stgs = stages || DEFAULT_STAGES;
 
   const handleSave = () => {
@@ -378,6 +382,43 @@ const ContactDetail = ({ contact, onClose, onUpdate, stages, onDelete, cadence }
 
   const removeNote = (id) => {
     setForm({...form, notesTimeline: (form.notesTimeline||[]).filter(n => n.id !== id)});
+  };
+
+  // Link-only attachments: never embed binary in the payload (would blow past
+  // Supabase row size + Sentry breadcrumb limits). User pastes URLs to files
+  // hosted elsewhere (Drive, Dropbox, etc.); we store {label, url, addedAt}.
+  const normalizeUrl = (u) => {
+    const t = (u || '').trim();
+    if (!t) return '';
+    if (/^https?:\/\//i.test(t) || /^mailto:/i.test(t)) return t;
+    return 'https://' + t;
+  };
+  const detectKind = (url) => {
+    const u = (url || '').toLowerCase();
+    if (u.includes('drive.google.com') || u.includes('docs.google.com')) return { icon: '📄', source: 'Drive' };
+    if (u.includes('dropbox.com')) return { icon: '📦', source: 'Dropbox' };
+    if (u.includes('loom.com')) return { icon: '🎬', source: 'Loom' };
+    if (u.includes('notion.so') || u.includes('notion.site')) return { icon: '🗒', source: 'Notion' };
+    if (u.includes('youtube.com') || u.includes('youtu.be')) return { icon: '▶️', source: 'YouTube' };
+    if (/\.(pdf)(\?|$)/i.test(u)) return { icon: '📕', source: 'PDF' };
+    if (/\.(png|jpe?g|gif|webp|svg)(\?|$)/i.test(u)) return { icon: '🖼', source: 'Image' };
+    if (/\.(mp4|mov|webm)(\?|$)/i.test(u)) return { icon: '🎥', source: 'Video' };
+    return { icon: '🔗', source: 'Link' };
+  };
+  const addAttachment = () => {
+    const url = normalizeUrl(attachUrl);
+    if (!url) return;
+    let label = attachLabel.trim();
+    if (!label) {
+      try { label = new URL(url).hostname.replace(/^www\./, ''); } catch (e) { label = url; }
+    }
+    const att = { id: Math.random().toString(36).substr(2, 9), label, url, addedAt: new Date().toISOString() };
+    setForm({...form, attachments: [att, ...(form.attachments||[])]});
+    setAttachLabel('');
+    setAttachUrl('');
+  };
+  const removeAttachment = (id) => {
+    setForm({...form, attachments: (form.attachments||[]).filter(a => a.id !== id)});
   };
 
   const handleFieldChange = (field, value) => {
@@ -469,6 +510,47 @@ const ContactDetail = ({ contact, onClose, onUpdate, stages, onDelete, cadence }
         <details className="mb-3">
           <summary className="text-sm font-semibold text-gray-700 cursor-pointer mb-2">Notes</summary>
           {renderField("Notes", "notes", "textarea")}
+        </details>
+
+        {/* Attachments (link-only — no binary uploads) */}
+        <details open className="mb-3">
+          <summary className="text-sm font-semibold text-gray-700 cursor-pointer mb-2">{'📎'} Attachments ({(form.attachments||[]).length})</summary>
+          <div className="flex flex-col gap-2 mb-2">
+            <input
+              value={attachLabel}
+              onChange={e => setAttachLabel(e.target.value)}
+              placeholder="Label (optional)"
+              className="text-sm w-full"
+            />
+            <div className="flex gap-2">
+              <input
+                value={attachUrl}
+                onChange={e => setAttachUrl(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addAttachment())}
+                placeholder="Paste URL (Drive, Dropbox, Loom, Notion…)"
+                className="flex-1 text-sm"
+              />
+              <button onClick={addAttachment} className="px-3 py-1 text-white rounded text-sm font-medium" style={{background: 'var(--accent)'}}>Add</button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {(form.attachments||[]).length === 0 && (
+              <div className="text-xs text-gray-400 text-center py-2">No attachments yet</div>
+            )}
+            {(form.attachments||[]).map(a => {
+              const k = detectKind(a.url);
+              return (
+                <div key={a.id} className="bg-gray-50 rounded p-2 text-sm flex items-start gap-2">
+                  <span className="text-base flex-shrink-0">{k.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-medium break-all">{a.label}</a>
+                    <div className="text-xs text-gray-400 mt-0.5">{k.source} · {formatDate(a.addedAt)}</div>
+                  </div>
+                  <button onClick={() => removeAttachment(a.id)} className="text-red-400 hover:text-red-600 flex-shrink-0">{'×'}</button>
+                </div>
+              );
+            })}
+          </div>
         </details>
 
         {/* Tags */}
@@ -1351,7 +1433,7 @@ const CSVImportView = ({ stages, onImport }) => {
       notes: mapping.notes !== undefined ? row[mapping.notes] || '' : '',
       stage: targetStage, priority: 'medium', lastContactDate: today(),
       nextFollowUp: calculateNextFollowUp(targetStage),
-      tags: ['imported'], interactions: [], notesTimeline: [],
+      tags: ['imported'], interactions: [], notesTimeline: [], attachments: [],
       createdAt: new Date().toISOString(), stageChangedAt: new Date().toISOString()
     }));
     onImport(newContacts); setImportDone(true);
@@ -1539,6 +1621,60 @@ const PasswordChanger = () => {
         <button type="submit" disabled={busy || !current || !next || !confirm} className="px-4 py-2 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50" style={{background: 'var(--accent)'}}>{busy ? 'Updating\u2026' : 'Update password'}</button>
       </div>
     </form>
+  );
+};
+
+// ─── ScratchpadView ───
+// Free-form notes pane backed by data.scratchpad. Auto-saves 400ms after the
+// user stops typing — same data flow as everything else, so it rides along on
+// the existing localStorage + Supabase upsert + IDB backup.
+const ScratchpadView = ({ scratchpad, onUpdate }) => {
+  const [text, setText] = useState(scratchpad || '');
+  const [savedAt, setSavedAt] = useState(null);
+  const debounceRef = useRef();
+
+  useEffect(() => { setText(scratchpad || ''); }, [scratchpad]);
+
+  const handleChange = (e) => {
+    const v = e.target.value;
+    setText(v);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onUpdate(v);
+      setSavedAt(new Date());
+    }, 400);
+  };
+
+  const charCount = text.length;
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold" style={{color: 'var(--text-primary)'}}>{'📝'} Scratchpad</h1>
+          <p className="text-sm mt-1" style={{color: 'var(--text-secondary)'}}>Free-form notes, ideas, and cross-cutting observations. Auto-saves as you type.</p>
+        </div>
+        <div className="text-xs text-right" style={{color: 'var(--text-secondary)'}}>
+          <div>{wordCount} words · {charCount} chars</div>
+          {savedAt && <div className="mt-0.5">Saved {savedAt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>}
+        </div>
+      </div>
+      <textarea
+        value={text}
+        onChange={handleChange}
+        placeholder={'Patterns across clients…\nIdeas to revisit…\nQuestions for next session…'}
+        className="w-full rounded-lg border p-4 text-sm leading-relaxed focus:outline-none focus:ring-2"
+        style={{
+          background: 'var(--bg-secondary)',
+          color: 'var(--text-primary)',
+          borderColor: 'var(--border)',
+          minHeight: 'calc(100vh - 220px)',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          resize: 'vertical'
+        }}
+      />
+    </div>
   );
 };
 
@@ -2539,6 +2675,7 @@ const App = ({ user, initialCloudData }) => {
     setData(prev => ({...prev, stagnation: ns}));
   };
   const handleBatchImport = (nc) => { setData(prev => ({...prev, contacts: [...prev.contacts, ...nc]})); };
+  const handleUpdateScratchpad = (text) => { setData(prev => ({...prev, scratchpad: text})); };
   const handleExport = () => exportContactsToCSV(contacts);
   const handleRestoreFromBackup = () => {
     try {
@@ -2578,7 +2715,7 @@ const App = ({ user, initialCloudData }) => {
   const handleAddContact = () => {
     const nc = { id: Math.random().toString(36).substr(2,9), name: '', company: '', stage: stages[0], email: '', phone: '', source: 'Direct',
       dealValue: 0, monthlyRevenue: 0, priority: 'medium', lastContactDate: today(), nextFollowUp: calculateNextFollowUp(stages[0], cadence),
-      notes: '', tags: [], interactions: [], notesTimeline: [], createdAt: new Date().toISOString(), stageChangedAt: new Date().toISOString() };
+      notes: '', tags: [], interactions: [], notesTimeline: [], attachments: [], createdAt: new Date().toISOString(), stageChangedAt: new Date().toISOString() };
     setData(prev => ({...prev, contacts: [nc, ...prev.contacts]}));
     setSelectedContact(nc);
     // Focus the name input after the detail panel animates in
@@ -2597,6 +2734,7 @@ const App = ({ user, initialCloudData }) => {
     { id: 'digest', label: 'Weekly Digest', icon: <Icon name="clipboard" size={16} /> },
     { id: 'roi', label: 'Source ROI', icon: <Icon name="chart" size={16} /> },
     { id: 'import', label: 'Import', icon: <Icon name="upload" size={16} /> },
+    { id: 'scratchpad', label: 'Scratchpad', icon: <Icon name="edit" size={16} /> },
     { id: 'settings', label: 'Settings', icon: <Icon name="settings" size={16} /> }
   ];
 
@@ -2627,6 +2765,7 @@ const App = ({ user, initialCloudData }) => {
       case 'digest': return <WeeklyDigestView contacts={contacts} stages={stages} />;
       case 'roi': return <SourceROIView contacts={contacts} />;
       case 'import': return <CSVImportView stages={stages} onImport={handleBatchImport} />;
+      case 'scratchpad': return <ScratchpadView scratchpad={data.scratchpad || ''} onUpdate={handleUpdateScratchpad} />;
       case 'settings': return <SettingsView stages={stages} onUpdateStages={handleUpdateStages} onRenameStage={handleRenameStage} cadence={cadence} onUpdateCadence={handleUpdateCadence} stagnation={stagnation} onUpdateStagnation={handleUpdateStagnation} contacts={contacts} onExport={handleExport} onRestoreBackup={handleRestoreFromBackup} onDownloadJSON={handleDownloadJSON} onRestoreFile={handleRestoreFromFile} onRestorePreUpdate={handleRestorePreUpdate} />;
       default: return <DashboardView contacts={contacts} stages={stages} stagnation={stagnation} onShowStagnant={() => { setStagnantOnly(true); setActiveTab('contacts'); }} />;
     }
@@ -2749,7 +2888,7 @@ const App = ({ user, initialCloudData }) => {
               <span>{tab.label}</span>
             </div>
           ))}
-          <div className={'mobile-tab ' + (['digest','roi','import','settings'].includes(activeTab) || mobileMoreOpen ? 'active' : '')} onClick={() => setMobileMoreOpen(v => !v)}>
+          <div className={'mobile-tab ' + (['digest','roi','import','scratchpad','settings'].includes(activeTab) || mobileMoreOpen ? 'active' : '')} onClick={() => setMobileMoreOpen(v => !v)}>
             <span><Icon name="menu" size={18} /></span>
             <span>More</span>
           </div>
